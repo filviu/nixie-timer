@@ -1,0 +1,16 @@
+main
+	__CC2DW
+		____DoICP
+	timer_init
+	Button
+		Delay_500us
+	print_time
+		Div_8x8_U
+		____DoICP
+	pwm_init
+		PWM1_Init
+		PWM1_Set_Duty
+			Mul_16x16_U
+	PWM1_Start
+	PWM1_Stop
+interrupt
