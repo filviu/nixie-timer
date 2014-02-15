@@ -4,26 +4,10 @@ unsigned char timerstart=0,i,j;
 char oldstates=0,oldstatem=0;
 const short bcd[] = {0b0000,0b0001,0b0010,0b0011,0b0100,0b0101,0b0110,0b0111,0b1000,0b1001};
 
-void interrupt() {
-/* Switched to TMR1 as TMR2 is used by PWM */
-  if (TMR1IF_bit) {
-    CNT++;                    // Increment counter
-    TMR1IF_bit = 0;           // interrupt must be cleared by software
-    TMR1IE_bit = 1;           // reenable the interrupt
-    TMR1H = 60;               // preset for timer1 MSB register
-    TMR1L = 176;              // preset for timer1 LSB register
-  }
-}
-
 void print_time() {
      if (HH > 0) {            // showing HH:MM
-        if (HH==0) {
-           d1=0;
-           d2=0;
-        } else {
-          d1 = HH / 10;
-          d2 = HH % 10;
-        }
+        d1 = HH / 10;
+        d2 = HH % 10;
         if (MM==0) {
            d3 = 0;
            d4 = 0;
@@ -47,23 +31,47 @@ void print_time() {
            d4 = SS % 10;
         }
       }
-
        PORTB=0xFF;
        PORTC=0xFF;
        PORTD=0xFF;
-       delay_us(20);
-
+       Delay_us(20);
+/* remove this, it applies to my setup only */
        if (d2==9) d2=0; // bad wiring 0 and 9 are reversed
        else if (d2==0) d2=9;
-
        if (d4==9) d4=0; // bad wiring 0 and 9 are reversed
        else if (d4==0) d4=9;
-       
+/* remove until here */       
        PORTC=(bcd[d4]<<4);
        PORTD=(bcd[d3]<<4);
        PORTB=(bcd[d1]<<4) | bcd[d2];
-
 }
+
+
+void interrupt() {
+/* Switched to TMR1 as TMR2 is used by PWM */
+  if (TMR1IF_bit) {
+    TMR1IF_bit = 0;           // interrupt must be cleared by software
+    TMR1IE_bit = 1;           // reenable the interrupt
+    TMR1H = 60;               // preset for timer1 MSB register
+    TMR1L = 176;              // preset for timer1 LSB register
+    CNT++;                    // Increment counter
+    if (CNT==50) { // CNT increases every 0.02s so one second has passed here
+      CNT=0;
+      if ((SS>0)||(MM>0)||(HH>0)) {
+        if ((SS==0)&&(MM==0)&&(HH>0)) {
+           HH--;
+           MM=59;
+           SS=59;
+        } else if ((SS==0)&&(MM>0)) {
+           MM--;
+           SS=59;
+        } else SS--;
+      }
+      print_time();
+    }
+  }
+}
+
 
 void timer_init() {
 //Timer1 Registers Prescaler= 1 - TMR1 Preset = 15536 - Freq = 50.00 Hz - Period = 0.020000 seconds
@@ -91,7 +99,7 @@ void timer_init() {
 
 void pwm_init() {
   PWM1_Init(2000);         // Initialize PWM2 module at 5KHz  // pitch
-  PWM1_Set_Duty(70);       // Set current duty for PWM2       // colume
+  PWM1_Set_Duty(70);       // Set current duty for PWM2       // volume
 }
 
 void main(){
@@ -107,6 +115,7 @@ void main(){
   timer_init();
   while(1) {                         // Endless loop
 // seconds button
+/* I didn't build this 
    if (Button(&PORTA, 0, 1, 1))                // detect logical one on RA0 pin
       oldstates = 1;
    if (oldstates && Button(&PORTA, 0, 1, 0)) {  // detect one-to-zero transition on RA0 pin
@@ -122,62 +131,55 @@ void main(){
       timerstart = 1;
       print_time();
    }
+*/
 // minutes button
    if (Button(&PORTA, 1, 1, 1))                // detect logical one on RA1 pin
       oldstatem = 1;
    if (oldstatem && Button(&PORTA, 1, 1, 0)) {  // detect one-to-zero transition on RA1 pin
-       if (MM==59) {
-          MM=0;
-          HH++;
-       } else MM++;
+      if (MM==59) {
+         MM=0;
+         HH++;
+      } else MM++;
       oldstatem = 0;
       timerstart = 1;
       print_time();
    }
-   if (CNT>=50) { // CNT increases every 0.02s
-      CNT=0;
-      if ((SS==0)&&(MM==0)&&(HH==0)) {
-         if (timerstart == 1) {
-          // timer reached 0, sound the alarm
-             pwm_init();
-             i=0;
-             while (i<10) {
-              j=0;
-              while (j<=5){
-                  PWM1_Start();                       // start PWM2
-                  delay_ms(45);                       // buzz length
+   if ((SS==0)&&(MM==0)&&(HH==0)&&(timerstart == 1)) {
+   // timer reached 0, sound the alarm
+      pwm_init();
+      i=0;
+      // 10 series of 6 beeps
+      while (i<10) {
+            j=0;
+            while (j<=5){
+                  PWM1_Start();                       // start PWM1
+                  Delay_ms(45);                       // buzz length
                   PWM1_Stop();
-                  delay_ms(35);                       // silence length
+                  Delay_ms(35);                       // silence length
                   j++;
-                  if (Button(&PORTA, 1, 1, 1))                // detect logical one on RA1 pin
+                  if (Button(&PORTA, 1, 1, 1))        // detect logical one on RA1 pin
                      oldstatem = 1;
                   if (oldstatem && Button(&PORTA, 1, 1, 0)) {
-                     j=6;
+                     j=6;                            // cheap way to end the alarm
                      i=11;
                      oldstatem = 0;
                   }
-              }
-              delay_ms(500);
-              if (Button(&PORTA, 1, 1, 1))                // detect logical one on RA1 pin
-                 oldstatem = 1;
-              if (oldstatem && Button(&PORTA, 1, 1, 0)) {
-                 i=11;
-                 oldstatem = 0;
-              }
-              i++;
-             }
-             timerstart = 0;
-             timer_init();
-         }
-      } else if ((SS==0)&&(MM==0)&&(HH>0)) {
-         HH--;
-         MM=59;
-         SS=59;
-      } else if ((SS==0)&&(MM>0)) {
-         MM--;
-         SS=59;
-      } else SS--;
-      print_time();
+            }
+            Delay_ms(500);                           // delay between 6 beeps
+      // we should be able to cancel the alarm here too
+            if (Button(&PORTA, 1, 1, 1))             // detect logical one on RA1 pin
+               oldstatem = 1;
+            if (oldstatem && Button(&PORTA, 1, 1, 0)) {
+               i=11;                                 // cheap way to end the alarm
+               oldstatem = 0;
+            }
+            i++;
+      }
+      timerstart = 0;
+      timer_init();
    }
-  }
+
+
+
+   }
 }

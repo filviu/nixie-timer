@@ -14,3 +14,6 @@ main
 	PWM1_Start
 	PWM1_Stop
 interrupt
+	print_time
+		Div_8x8_U
+		____DoICP
